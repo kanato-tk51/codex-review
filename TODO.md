@@ -1,93 +1,61 @@
 # TODO (codex-review)
 
-> ゴール: ローカルCLI+Web UIで、複数テンプレのLLMレビューを安全かつ快適に回せる状態へ。優先度順に記載。
+> ゴール: ブラウザUIからの指示でローカルターミナル上の codex コマンドを安全に実行できる仕組みを提供する。
 
-## P0: 動作安定・安全
-- [ ] 外部LLM送信ガード
-  - UIに「外部送信を許可」トグルとAPIキー入力欄を追加（config保存）。
-  - バックエンドで config.allowExternalSend=false の場合はLLM呼び出しを即ブロックし、理由を返す。
-- [ ] シークレット検知
-  - 送信前に diff/patch を正規表現スキャン（AWS_KEY/GCP_KEY/PRIVATE KEY/RSA/ghp_ 等）。ヒット時はタスクを error にして SSE 通知。
-  - ヒット一覧をレスポンスに含め、ユーザ承諾後に送る「強制送信モード」は当面なし。
-- [ ] ポート・権限問題の緩和
-  - CLIのデフォルトポートを環境変数で上書き可能にし、`--port 0` 時は割り当てポートをログに出す。
-  - .config/.data パスを必ずワークスペース配下に統一 (CONFIG_DIR / DATA_DIR)、ENVで上書き可能にする。
-- [ ] エラーハンドリングの明示
-  - API全体に try/catch を入れ、標準化エラーレスポンス `{error, detail?}`。
-  - ログレベル切替 (env LOG_LEVEL=info|debug)。
+## P0: 最低限の安全なシェル実行経路
+- [ ] シェル実行APIの追加
+  - `POST /api/shell/run`（仮）：ホワイトリスト化したコマンドのみ実行（例: `codex-review …`, `git status`, `pnpm run build`）。
+  - 環境変数 `ENABLE_SHELL_API=true` がないと 403 を返す。
+- [ ] 出力ストリーム配信
+  - SSE/WS で stdout/stderr をリアルタイム配信し、完了/失敗ステータスを通知。
+  - 標準入力は受け付けない（コマンドは非対話）。
+- [ ] 認可・CSRF対策
+  - トークンは使わず、同一オリジン制約 + 簡易CSRFトークンで防御。
+  - レートリミットの最小実装（IP/オリジン単位）。
+- [ ] UI最小実装
+  - 事前定義コマンドのプルダウン（自由入力なし）。
+  - 実行ボタンとログビュー（ストリーミング表示）。
+- [ ] ドキュメント
+  - 有効化方法（環境変数）、許可コマンド一覧、リスク説明、無効化手順を README に追記。
 
-## P1: ジョブ・キューの堅牢化
-- [ ] QueueAdapter 抽象化
-  - `p-queue` 実装をラップする interface を作り、BullMQ へ差し替え可能に。
-  - 並列数/待ち行列サイズを API/設定で変更できるようにする。
-- [ ] タスク再試行とキャンセル
-  - タスク失敗時のリトライ回数/間隔設定。
-  - フロントから「キャンセル」「再実行」を叩けるAPIを追加。
-- [ ] 永続キュー (M2以降)
-  - Redis + BullMQ 導入手順を docs に記載。ローカルではデフォルト無効。
+## P0: リポジトリ自動検出とブランチ選択UI
+- [ ] リポジトリスキャン（自動）
+  - アプリ起動時に **ルート直下のみ** を走査し、`.git` を含むディレクトリ一覧を収集（サブディレクトリは対象外）。
+  - `node_modules`, `.cache` など明示除外。ページ再読み込み時は毎回スキャンし直す（セッション内キャッシュのみ許容）。手動リフレッシュ API も用意。
+- [ ] リポジトリ取得（手動追加）
+  - ルート直下以外のリポはユーザーにフォルダを選択してもらい手動追加するUIを用意。
+  - フロントでディレクトリピッカーを開き、パスをバックエンドに送って登録するフローを追加。
+- [ ] ブランチ取得
+  - バックエンドで各リポのブランチ一覧を事前取得し、APIで返却（git branch --format を想定）。
+  - 取得失敗時のエラーもUIに表示できるようステータス込みで返す。
+- [ ] UI実装
+  - 初期画面にリポ一覧（自動スキャン結果＋手動追加分）を表示し、選択するとブランチ選択モーダル/セクションへ遷移。
+  - ブランチは事前ロード済みリストから選択式（再取得ボタン付き）。
+  - 選択中のリポ/ブランチ状態をグローバルストア（React Query / Zustand など）で保持。
+  - 「フォルダを選択して追加」ボタンを配置し、サブ階層リポを手動で取り込めるようにする。
+  - リポ/ブランチ一覧にステータス列を設け、取得エラーを明示表示。
+- [ ] API設計
+  - `GET /api/repos/auto`（ルート直下スキャン結果）
+  - `POST /api/repos/auto/refresh`（再スキャン）
+  - `POST /api/repos/manual`（手動追加: パスを受け取り登録）
+  - `GET /api/repos/:id/branches`（キャッシュ済みブランチ一覧）
+- [ ] ドキュメント
+  - スキャン対象ルートの指定方法（env `REPO_SCAN_ROOT`、未指定ならアプリ起動ディレクトリ）。
+  - サブ階層リポは手動追加する運用であることを明記。
+  - 除外パス/深さの設定方法、UIでのリフレッシュ手順。
 
-## P1: LLMクライアント強化
-- [ ] トークン見積り＆トリミング
-  - tiktoken 等で prompt tokens を概算し、maxTokens を超えないよう diff/patch を切り詰める。
-  - diffファイルのサイズ上限/件数上限/拡張子フィルタをオプション化し、テンプレ実行時に適用。
-- [ ] モデル選択 UI/設定
-  - テンプレ既定モデル + 実行時オーバーライドを UI から指定。
-- [ ] コスト/使用量ログ
-  - usage(prompt_tokens, completion_tokens) を DB に記録し、UI の Run/Task 詳細で表示。
-- [ ] リトライ/バックオフ
-  - 429/5xx 時に指数バックオフ3回、可変。
+## P1: 拡張と運用性
+- [ ] コマンドテンプレートの追加/削除を設定ファイルで管理（再起動なしで反映）。
+- [ ] 実行履歴の保存（ローカルDB）と UI 表示（成功/失敗・実行時刻・出力サマリ）。
+- [ ] 詳細権限制御：コマンドごとのロール/トークン制御を設計。
+- [ ] ログの長さ・保持期間・ダウンロード機能。
 
-## P1: Git/入力データ制御
-- [ ] 差分フィルタリング
-  - maxFiles, maxPatchBytes, 拡張子 allowlist/denylist を設定化。
-  - 大容量ファイルはスキップし、スキップ理由を結果に明示。
-- [ ] 依存ファイル抜粋
-  - package.json / pnpm-lock / requirements.txt / go.mod などを自動抽出し、テンプレに渡す optional コンテキストとして組み込む。
+## P2: 信頼性・テスト
+- [ ] シェル実行APIのユニット/統合テスト（モックプロセス）。
+- [ ] SSE/WS のE2Eテスト（モックコマンドでログが流れること）。
+- [ ] レートリミット/トークン認証のテスト。
 
-## P1: フロントエンド基礎実装
-- [ ] 画面構成
-  - Home: リポ一覧/追加、最近の実行。
-  - RepoDetail: base/target branch 選択、テンプレ複数選択、オプション（並列数/maxFiles/maxTokens/外部送信トグル）を指定して実行。
-  - Runs Dashboard: 実行中/完了のカードとステータス。
-  - Task Detail: ストリーミング結果のMarkdown表示、エラー表示、コピー/Issue出力ボタン。
-  - Template Manager: CRUD + インポート/エクスポート(JSON)。
-- [ ] データ取得
-  - React Query で `/api/repos`, `/api/templates`, `/api/reviews` をフェッチ。
-  - SSE hook (`/api/reviews/:id/stream`) で進捗更新。
-- [ ] UX
-  - モデル/並列度/送信上限スライダのフォームバリデーション。
-  - ローディング/エラー/空状態コンポーネント。
-
-## P2: 設定・ストレージ
-- [ ] 設定画面
-  - APIキー、allowExternalSend、defaultModel、parallelism、maxFiles/maxTokens、データ/ログパス表示・コピー。
-- [ ] ログ/DBのメンテ
-  - 「ログ削除」「DBパージ」ボタン（確認ダイアログ付）。
-- [ ] **DB移行（Supabase/PostgreSQL）準備**
-  - 接続設定: `DATABASE_URL`（Postgres形式）をサポートし、未指定時はSQLiteフォールバックにする。
-  - DBゲートウェイ層: 現在の better-sqlite3 直呼びを薄いリポジトリ層に置き換え、SQLはそこに集約。
-  - マイグレーションツール導入（例: knex/drizzle/umzug）。既存DDLを移植し、SQLite/Postgres両対応のスキーマにする。
-  - Supabase接続テスト: ローカル `.env` に `DATABASE_URL` を設定して CRUD・トランザクションの簡易テスト。
-  - 認証/権限: Supabase 側の行レベルセキュリティ（RLS）はローカル用途ではオフ、将来マルチユーザ化を見据えた設計メモを残す。
-  - コスト/レイテンシ対策: コネクションプール設定（pg-pool）、タイムアウト・リトライの共通化。
-  - データ移行手順書: SQLite から Postgres への export/import 手順（例: sqlite3 .dump → psql / またはスクリプト）を docs に追加。
-
-## P2: レポート出力/連携
-- [ ] GitHub Issue/PR 用テンプレ生成（ワンクリックでクリップボード）。
-- [ ] 結果エクスポート: JSON/Markdown。
-
-## P2: テスト/CI
-- [ ] Unit: git-utils, prompt-builder, template-store, review-service（モックLLM）。
-- [ ] Integration: Fastify サーバを supertest で叩く。
-- [ ] E2E (任意): Playwright + モックLLMでUIフロー確認。
-- [ ] CI: lint/test、(任意) web build のみ実行。
-
-## P3: スケール/配布
-- [ ] npm pack / GitHub Release スクリプト。
-- [ ] Homebrew formula or npm global install ドキュメント。
-- [ ] BullMQ/Redis 本番モード手順を README に追記。
-
-## 既知の改善メモ
-- [ ] favicon 404 対応（スタティックに置く）。
-- [ ] SSEの切断時再接続ロジックをフロントに実装。
-- [ ] ログ出力フォーマット (pino) の設定（timestamp/level/json toggle）。
+## 既知の検討事項
+- [ ] 完全非対話コマンドに制限するポリシーの維持方法。
+- [ ] Windows/WSL/macOS でのコマンド互換性（パスやシェル差異）。
+- [ ] 将来的に Electron/Tauri 化する際の再利用性。
