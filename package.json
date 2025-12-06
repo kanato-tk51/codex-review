@@ -1,0 +1,54 @@
+{
+  "name": "codex-review",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local CLI + web UI to run multi-template code reviews via LLM",
+  "packageManager": "pnpm@10.17.0",
+  "bin": {
+    "codex-review": "bin/codex-review.js"
+  },
+  "workspaces": [
+    "web"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:web": "npm --prefix web run build",
+    "build:all": "npm run build && npm run build:web",
+    "dev": "ts-node-dev --respawn --transpile-only --ignore-watch node_modules --watch src --poll src/cli.ts -- --no-open",
+    "dev:web": "npm --prefix web run dev",
+    "dev:all": "npm-run-all --parallel dev dev:web",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck:web": "npm --prefix web run typecheck",
+    "check": "npm-run-all typecheck typecheck:web test",
+    "start": "node ./dist/cli.js",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@fastify/cors": "^8.4.0",
+    "@fastify/sensible": "4.1.0",
+    "@fastify/static": "^6.10.2",
+    "@fastify/websocket": "^7.2.0",
+    "better-sqlite3": "^12.5.0",
+    "commander": "^12.0.0",
+    "dotenv": "^16.4.5",
+    "fastify": "^4.26.2",
+    "mustache": "^4.2.0",
+    "open": "^9.1.0",
+    "openai": "^4.57.0",
+    "p-queue": "^7.4.0",
+    "simple-git": "^3.21.0",
+    "uuid": "^9.0.1",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.10",
+    "@types/mustache": "^4.2.5",
+    "@types/node": "^20.11.30",
+    "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.5.10",
+    "npm-run-all": "^4.1.5",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.4.5",
+    "vitest": "^1.5.2"
+  }
+}
