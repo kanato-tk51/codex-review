@@ -33,7 +33,7 @@ export async function reviewRoutes(app: FastifyInstance) {
     }
 
     const config = loadConfig();
-    configureFromOptions(body.options);
+    await configureFromOptions(body.options);
     const { run, tasks } = await createReviewRun(body);
     markRunStatus(run.id, 'running');
 

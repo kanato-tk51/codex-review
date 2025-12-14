@@ -1,8 +1,16 @@
 import { Command } from 'commander';
-import open from 'open';
 import { startServer } from './server';
 import { ensureConfigDir, loadConfig } from './config';
 import { addRepo } from './services/repo-service';
+
+let openModule: typeof import('open') | undefined;
+
+async function openInBrowser(url: string) {
+  if (!openModule) {
+    openModule = await import('open');
+  }
+  await openModule.default(url);
+}
 
 export async function startCli() {
   const program = new Command();
@@ -37,7 +45,7 @@ export async function startCli() {
   const url = `http://127.0.0.1:${port}`;
   console.log(`codex-review server running at ${url}`);
   if (opts.open !== false) {
-    open(url).catch(() => {});
+    openInBrowser(url).catch(() => {});
   }
 
   const close = async () => {
