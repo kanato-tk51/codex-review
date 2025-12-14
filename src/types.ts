@@ -15,6 +15,7 @@ export interface TemplateRecord {
   system_prompt?: string;
   user_prompt_template: string;
   default_model?: string;
+  repo_id?: string | null;
   created_at: string;
 }
 

@@ -1,0 +1,17 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background-color: #faf7ef;
+  color: #111;
+  font-family: "Inter", "Noto Sans JP", system-ui, -apple-system, sans-serif;
+}
+a { color: #111; }
+
+.template-card {
+  transition: box-shadow 120ms ease, transform 120ms ease, opacity 120ms ease;
+}
+
+.template-card.dragging {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+  transform: scale(1.01);
+}

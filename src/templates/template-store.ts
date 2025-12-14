@@ -4,15 +4,19 @@ import { TemplateRecord } from '../types';
 
 const db = getDb();
 
-export function listTemplates(): TemplateRecord[] {
-  const stmt = db.prepare('SELECT * FROM templates ORDER BY created_at DESC');
-  return stmt.all() as TemplateRecord[];
+export function listTemplates(repoId?: string): { repo: TemplateRecord[]; global: TemplateRecord[] } {
+  const stmt = repoId
+    ? db.prepare('SELECT * FROM templates WHERE repo_id = @repoId ORDER BY created_at DESC')
+    : db.prepare('SELECT * FROM templates WHERE repo_id IS NULL ORDER BY created_at DESC');
+  const repo = repoId ? (stmt.all({ repoId }) as TemplateRecord[]) : [];
+  const global = db.prepare('SELECT * FROM templates WHERE repo_id IS NULL ORDER BY created_at DESC').all() as TemplateRecord[];
+  return { repo, global };
 }
 
 export function createTemplate(input: Omit<TemplateRecord, 'id' | 'created_at'>): TemplateRecord {
   const id = uuidv4();
-  const stmt = db.prepare(`INSERT INTO templates (id, name, category, system_prompt, user_prompt_template, default_model)
-    VALUES (@id, @name, @category, @system_prompt, @user_prompt_template, @default_model)`);
+  const stmt = db.prepare(`INSERT INTO templates (id, name, category, system_prompt, user_prompt_template, default_model, repo_id)
+    VALUES (@id, @name, @category, @system_prompt, @user_prompt_template, @default_model, @repo_id)`);
   stmt.run({ id, ...input });
   return getTemplate(id)!;
 }
@@ -27,7 +31,7 @@ export function updateTemplate(id: string, input: Partial<Omit<TemplateRecord, '
   if (!current) return undefined;
   const next = { ...current, ...input } as TemplateRecord;
   const stmt = db.prepare(`UPDATE templates SET name=@name, category=@category, system_prompt=@system_prompt,
-    user_prompt_template=@user_prompt_template, default_model=@default_model WHERE id=@id`);
+    user_prompt_template=@user_prompt_template, default_model=@default_model, repo_id=@repo_id WHERE id=@id`);
   stmt.run({ ...next });
   return getTemplate(id)!;
 }

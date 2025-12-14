@@ -1,34 +1,27 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { MantineProvider, AppShell, Container, Title, Text, Button, Group, List } from '@mantine/core';
+import { MantineProvider } from '@mantine/core';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import '@mantine/core/styles.css';
+import './global.css';
+import { HomePage, RepoPage } from './pages/Home';
+
+const client = new QueryClient();
 
 const App = () => (
-  <MantineProvider>
-    <AppShell padding="md">
-      <AppShell.Header>
-        <Container>
-          <Title order={3} style={{ padding: '12px 0' }}>codex-review (MVP UI placeholder)</Title>
-        </Container>
-      </AppShell.Header>
-      <AppShell.Main>
-        <Container>
-          <Title order={4}>セットアップ手順</Title>
-          <List spacing="xs" mt="sm">
-            <List.Item>1. `/api/repos` に POST してリポジトリを登録</List.Item>
-            <List.Item>2. テンプレートを `/api/templates` で作成</List.Item>
-            <List.Item>3. `/api/reviews` に repoId / templateIds / branch を渡して実行</List.Item>
-            <List.Item>4. SSE: `/api/reviews/:id/stream` で進捗購読</List.Item>
-          </List>
-          <Group mt="lg">
-            <Button component="a" href="/api/health" target="_blank">API Health</Button>
-            <Button component="a" href="https://github.com" target="_blank" variant="light">Docs (TODO)</Button>
-          </Group>
-          <Text mt="xl" c="dimmed">本UIはプレースホルダです。React Query 等で実装を拡張してください。</Text>
-        </Container>
-      </AppShell.Main>
-    </AppShell>
+  <MantineProvider defaultColorScheme="light">
+    <QueryClientProvider client={client}>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/repo/:id" element={<RepoPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </QueryClientProvider>
   </MantineProvider>
 );
 
-ReactDOM.createRoot(document.getElementById('root')!).render(<App />);
+const rootEl = document.getElementById('root')!;
+ReactDOM.createRoot(rootEl).render(<App />);

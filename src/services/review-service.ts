@@ -1,8 +1,9 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '../db/sqlite';
-import { ReviewRequestBody, ReviewRunRecord, ReviewTaskRecord, RunStatus, TaskStatus } from '../types';
+import { ReviewRequestBody, ReviewRunRecord, ReviewTaskRecord, RunStatus, TaskStatus, RepoRecord } from '../types';
 import { getRepo } from './repo-service';
 import { getTemplate } from '../templates/template-store';
+import { getCachedAutoRepos } from './repo-scan-service';
 
 const db = getDb();
 
@@ -10,8 +11,20 @@ const db = getDb();
  * レビュー実行を作成し、テンプレートごとのタスクを生成する。
  * @throws リポジトリまたはテンプレートが存在しない場合
  */
-export function createReviewRun(body: ReviewRequestBody): { run: ReviewRunRecord; tasks: ReviewTaskRecord[] } {
-  const repo = getRepo(body.repoId);
+export async function createReviewRun(body: ReviewRequestBody): Promise<{ run: ReviewRunRecord; tasks: ReviewTaskRecord[] }> {
+  let repo: RepoRecord | undefined = getRepo(body.repoId);
+  if (!repo) {
+    const autos = await getCachedAutoRepos();
+    const found = autos.find((r) => r.id === body.repoId);
+    if (found) {
+      db.prepare('INSERT OR IGNORE INTO repos (id, name, path) VALUES (@id,@name,@path)').run({
+        id: found.id,
+        name: found.name,
+        path: found.path,
+      });
+      repo = getRepo(found.id);
+    }
+  }
   if (!repo) throw new Error('Repo not found');
 
   const runId = uuidv4();
@@ -79,7 +92,7 @@ export function markRunStatus(id: string, status: RunStatus) {
 
 /** 残タスクが無ければ実行をdoneに遷移させる。 */
 export function refreshRunCompletion(runId: string) {
-  const row = db.prepare('SELECT COUNT(*) as cnt FROM review_tasks WHERE run_id=? AND status IN ("queued","running")').get(runId) as any;
+  const row = db.prepare("SELECT COUNT(*) as cnt FROM review_tasks WHERE run_id=? AND status IN ('queued','running')").get(runId) as any;
   if (row?.cnt === 0) {
     markRunStatus(runId, 'done');
   }

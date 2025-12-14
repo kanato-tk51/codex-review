@@ -5,7 +5,10 @@ import { createTemplate, deleteTemplate, getTemplate, listTemplates, updateTempl
  * テンプレートCRUDに関するAPIルートを登録する。
  */
 export async function templateRoutes(app: FastifyInstance) {
-  app.get('/api/templates', async () => listTemplates());
+  app.get('/api/templates', async (req: FastifyRequest<{ Querystring: { repoId?: string } }>) => {
+    const repoId = req.query.repoId;
+    return listTemplates(repoId);
+  });
 
   app.post('/api/templates', async (req: FastifyRequest<{ Body: Record<string, any> }>, reply: FastifyReply) => {
     const body = req.body || {};
@@ -16,6 +19,7 @@ export async function templateRoutes(app: FastifyInstance) {
       system_prompt: body.system_prompt,
       user_prompt_template: body.user_prompt_template,
       default_model: body.default_model,
+      repo_id: body.repo_id || null,
     });
     return rec;
   });

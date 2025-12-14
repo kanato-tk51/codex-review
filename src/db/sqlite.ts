@@ -36,6 +36,7 @@ export function migrate(db = getDb()) {
       system_prompt TEXT,
       user_prompt_template TEXT NOT NULL,
       default_model TEXT,
+      repo_id TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS review_runs (
@@ -71,6 +72,14 @@ export function migrate(db = getDb()) {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  // add repo_id column to templates if missing (for existing DBs)
+  const cols = db.prepare('PRAGMA table_info(templates)').all() as { name: string }[];
+  const hasRepoId = cols.some((c) => c.name === 'repo_id');
+  if (!hasRepoId) {
+    db.exec('ALTER TABLE templates ADD COLUMN repo_id TEXT;');
+  }
+
   return db;
 }
 

@@ -4,6 +4,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '../db/sqlite';
 import { RepoRecord } from '../types';
 import { safeGitTopLevel } from '../git/git-utils';
+import { refreshBranches } from './branch-cache';
+import { RepoSummary } from './repo-scan-service';
 
 const db = getDb();
 
@@ -34,4 +36,29 @@ export async function addRepo(repoPath: string): Promise<RepoRecord> {
 /** ID でリポジトリを取得する。 */
 export function getRepo(id: string): RepoRecord | undefined {
   return db.prepare('SELECT * FROM repos WHERE id = ?').get(id) as RepoRecord | undefined;
+}
+
+export function deleteRepo(id: string) {
+  db.prepare('DELETE FROM repos WHERE id = ?').run(id);
+}
+
+export async function toRepoSummary(repo: RepoRecord): Promise<RepoSummary> {
+  const branch = await refreshBranches(repo.path);
+  const stats = fs.statSync(repo.path);
+  return {
+    id: repo.id,
+    name: repo.name,
+    path: repo.path,
+    source: 'manual',
+    branches: branch.branches,
+    branchStatus: branch.status,
+    branchError: branch.error,
+    fetchedAt: branch.fetchedAt,
+    createdAt: stats.birthtimeMs,
+  };
+}
+
+export async function listRepoSummaries(): Promise<RepoSummary[]> {
+  const repos = listRepos();
+  return Promise.all(repos.map((repo) => toRepoSummary(repo)));
 }

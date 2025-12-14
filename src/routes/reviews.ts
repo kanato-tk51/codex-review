@@ -23,7 +23,7 @@ export async function reviewRoutes(app: FastifyInstance) {
     const { id } = req.params;
     const run = getRun(id);
     if (!run) return reply.status(404).send({ error: 'not found' });
-    return { ...run, tasks: listTasksForRun(id) };
+    return { run, tasks: listTasksForRun(id) };
   });
 
   app.post('/api/reviews', async (req: FastifyRequest<{ Body: ReviewRequestBody }>, reply: FastifyReply) => {
@@ -34,7 +34,7 @@ export async function reviewRoutes(app: FastifyInstance) {
 
     const config = loadConfig();
     configureFromOptions(body.options);
-    const { run, tasks } = createReviewRun(body);
+    const { run, tasks } = await createReviewRun(body);
     markRunStatus(run.id, 'running');
 
     // enqueue each task
